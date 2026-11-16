@@ -1,0 +1,5 @@
+.DS_Store
+out/
+cook/*
+!cook/ROUNDS.md
+deploy/.vercel

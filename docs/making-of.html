@@ -1,0 +1,641 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kelp Canyon 제작 기록</title>
+<meta name="description" content="WebGPU 수중 장면을 절차적으로 만든 과정의 단계별 기록과 기술 스택입니다.">
+<style>
+/* 심해 단면도: 위에서 아래로 내려가는 한 줄기 흐름. 깊이에 따라 배경이 어두워집니다. */
+:root{
+  --bg:#f3f6f8; --bg2:#e7edf1; --surface:#ffffff; --line:#d3dde4;
+  --fg:#16242e; --fg2:#4a606f; --fg3:#748a99;
+  --accent:#0d6e8c; --accent2:#7a3f86; --accent-soft:#dceef4;
+  --ok:#1d6b4f; --warn:#8a5a12; --code-bg:#eef3f6;
+  --shadow:0 1px 2px rgba(16,40,56,.07),0 8px 24px rgba(16,40,56,.06);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#071620; --bg2:#0b1f2c; --surface:#102634; --line:#1e3b4d;
+  --fg:#e6f2f7; --fg2:#a9c3d1; --fg3:#7695a7;
+  --accent:#5fc6e4; --accent2:#c79ad4; --accent-soft:#113646;
+  --ok:#6fd3a6; --warn:#e0b86a; --code-bg:#0a1e2a;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#071620; --bg2:#0b1f2c; --surface:#102634; --line:#1e3b4d;
+  --fg:#e6f2f7; --fg2:#a9c3d1; --fg3:#7695a7;
+  --accent:#5fc6e4; --accent2:#c79ad4; --accent-soft:#113646;
+  --ok:#6fd3a6; --warn:#e0b86a; --code-bg:#0a1e2a;
+  --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto} *{animation-duration:.01ms!important;transition-duration:.01ms!important}}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:400 16px/1.75 ui-sans-serif,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;
+  word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+h1,h2,h3{text-wrap:balance;line-height:1.3;margin:0}
+code,kbd{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;word-break:normal;overflow-wrap:normal}
+code{background:var(--code-bg);padding:.12em .4em;border-radius:5px;font-size:.88em;color:var(--fg2)}
+a{color:var(--accent)}
+.wrap{max-width:860px;margin:0 auto;
+  padding-left:max(20px,env(safe-area-inset-left,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}
+
+/* 테마 버튼 */
+.theme{position:fixed;top:max(14px,env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px));
+  z-index:30;display:flex;gap:6px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow)}
+.theme button{width:40px;height:40px;display:grid;place-items:center;border:1px solid transparent;border-radius:999px;
+  background:transparent;color:var(--fg2);cursor:pointer;padding:0}
+.theme button:hover{color:var(--fg)}
+.theme button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.theme button:focus-visible,.gl:focus-visible,a:focus-visible,.toc a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:4px}
+.theme svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
+
+/* 머리말 */
+header{padding:68px 0 36px;background:linear-gradient(180deg,var(--bg2),var(--bg))}
+.eyebrow{font-size:13px;letter-spacing:.09em;text-transform:uppercase;color:var(--fg3);margin:0 0 14px}
+h1{font-size:clamp(30px,5.4vw,46px);letter-spacing:-.02em}
+.lede{margin:18px 0 0;font-size:clamp(17px,2.2vw,19px);color:var(--fg2);max-width:62ch}
+/* 6개 항목이므로 2열과 3열만 씁니다. auto-fit은 마지막 줄에 빈 칸을 남깁니다. */
+.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;margin:34px 0 0;
+  background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+@media (min-width:640px){.facts{grid-template-columns:repeat(3,1fr)}}
+.facts div{background:var(--surface);padding:15px 17px;min-width:0}
+.facts dt{font-size:12.5px;color:var(--fg3);margin:0 0 4px}
+.facts dd{margin:0;font-size:20px;font-weight:600;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+.facts dd small{font-size:13px;font-weight:400;color:var(--fg3);margin-left:4px}
+
+/* 목차 */
+.toc{margin:34px 0 0;padding:18px 20px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.toc h2{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg3);margin:0 0 12px}
+.toc ol{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(215px,1fr));gap:7px 20px}
+.toc a{display:flex;gap:10px;text-decoration:none;color:var(--fg2);font-size:15px;padding:3px 0}
+.toc a:hover{color:var(--accent)}
+.toc .n{color:var(--fg3);font-variant-numeric:tabular-nums;min-width:1.6em}
+
+/* 단계 */
+main{padding:10px 0 60px}
+.phase{padding:44px 0;border-bottom:1px solid var(--line)}
+.phase:last-of-type{border-bottom:0}
+.ph-head{display:flex;gap:16px;align-items:baseline;flex-wrap:wrap}
+.ph-num{font-size:13px;font-weight:600;color:var(--accent);font-variant-numeric:tabular-nums;
+  background:var(--accent-soft);padding:3px 10px;border-radius:999px;white-space:nowrap}
+.phase h2{font-size:clamp(21px,3.2vw,27px);letter-spacing:-.015em;min-width:0}
+.goal{margin:14px 0 0;color:var(--fg2)}
+.phase p{margin:14px 0 0;max-width:64ch}
+.phase h3{margin:28px 0 0;font-size:16.5px;color:var(--fg)}
+.phase ul{margin:12px 0 0;padding-left:1.15em}
+.phase li{margin:7px 0;max-width:64ch}
+.phase li::marker{color:var(--fg3)}
+
+/* 기술 스택 */
+.stack{margin:22px 0 0;display:flex;flex-wrap:wrap;gap:7px}
+.chip{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;color:var(--fg2);
+  background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:5px 13px 5px 10px}
+.chip::before{content:"●";font-size:8px;line-height:1;color:var(--accent);flex:none}
+.chip.b::before{color:var(--accent2)}
+.chip.c::before{color:var(--ok)}
+
+/* 표 */
+.tw{margin:22px 0 0;overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:430px}
+th,td{text-align:left;padding:11px 15px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;font-size:12.5px;letter-spacing:.04em;text-transform:uppercase;color:var(--fg3);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap}
+.sev{display:inline-block;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.sev.hi{background:#fde8e4;color:#9a2f1c}
+.sev.mid{background:#fdf0dc;color:#8a5a12}
+.sev.lo{background:#e3eef7;color:#2b5d84}
+:root[data-theme="dark"] .sev.hi,html:not([data-theme="light"]) .sev.hi{background:#3d1a14;color:#f1a695}
+:root[data-theme="dark"] .sev.mid,html:not([data-theme="light"]) .sev.mid{background:#3a2c12;color:#e8c483}
+:root[data-theme="dark"] .sev.lo,html:not([data-theme="light"]) .sev.lo{background:#15303f;color:#92c2e2}
+
+/* 메모 상자 */
+.note{margin:22px 0 0;padding:16px 18px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.note.warn{background:var(--code-bg)}
+.note b{display:block;margin-bottom:6px;font-size:14px;color:var(--fg)}
+.note p{margin:0;font-size:14.8px;color:var(--fg2)}
+.note p+p{margin-top:10px}
+
+/* 코드 */
+pre{margin:20px 0 0;padding:15px 17px;background:var(--code-bg);border:1px solid var(--line);border-radius:12px;
+  overflow-x:auto;font-size:13.3px;line-height:1.65;color:var(--fg2)}
+pre code{background:none;padding:0;font-size:inherit}
+
+/* 용어 툴팁 */
+.gl{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:help;
+  border-bottom:1px dotted var(--accent);text-underline-offset:3px}
+.gl:hover{color:var(--accent)}
+.gl[aria-expanded="true"]{color:var(--accent);background:var(--accent-soft)}
+#tip{position:absolute;z-index:50;max-width:min(330px,calc(100vw - 32px));padding:12px 14px;
+  background:var(--surface);color:var(--fg2);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);
+  font-size:14px;line-height:1.6;text-wrap:pretty}
+#tip[hidden]{display:none}
+#tip b{display:block;color:var(--fg);font-size:14.5px;margin-bottom:5px}
+#tip .en{color:var(--fg3);font-weight:400;font-size:13px}
+
+/* 용어집 */
+.glossary{padding:44px 0 0}
+.glist{margin:22px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.glist div{background:var(--surface);padding:14px 16px;min-width:0}
+.glist dt{font-weight:600;font-size:14.5px;margin:0 0 4px}
+.glist dt span{font-weight:400;color:var(--fg3);font-size:12.5px}
+.glist dd{margin:0;font-size:14px;color:var(--fg2);line-height:1.6}
+
+footer{padding:40px 0 60px;color:var(--fg3);font-size:14px;border-top:1px solid var(--line);margin-top:40px}
+footer p{margin:0 0 8px;max-width:64ch}
+</style>
+
+<div class="theme" role="group" aria-label="테마 선택">
+  <button type="button" id="bLight" aria-label="라이트 테마" title="라이트 테마" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/></svg>
+  </button>
+  <button type="button" id="bDark" aria-label="다크 테마" title="다크 테마" aria-pressed="false">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.3A8.6 8.6 0 1 1 9.7 3.5a7 7 0 0 0 10.8 10.8z"/></svg>
+  </button>
+</div>
+
+<header>
+  <div class="wrap">
+    <p class="eyebrow">제작 기록 · 2026-11-16</p>
+    <h1>Kelp Canyon을 만든 과정</h1>
+    <p class="lede">텍스처 파일도 모델 파일도 없이, 코드만으로 수중 협곡 하나를 만들었습니다.
+      결과물은 <code>index.html</code> 한 개이며, 브라우저에서 열면 <button type="button" class="gl" data-k="webgpu">WebGPU</button>로 실시간 렌더링됩니다.
+      아래는 요청을 받은 순간부터 멈춘 순간까지 각 단계에서 실제로 한 일입니다.</p>
+
+    <dl class="facts">
+      <div><dt>최종 파일 크기</dt><dd>52,430<small>바이트</small></dd></div>
+      <div><dt>장면 삼각형</dt><dd>528,916<small>개</small></dd></div>
+      <div><dt>배치된 개체</dt><dd>51,753<small>개</small></dd></div>
+      <div><dt>소스 줄 수</dt><dd>813<small>줄</small></dd></div>
+      <div><dt>시각 비평</dt><dd>4<small>회차</small></dd></div>
+      <div><dt>검증 게이트</dt><dd>9<small>종 통과</small></dd></div>
+    </dl>
+
+    <nav class="toc" aria-label="목차">
+      <h2>목차</h2>
+      <ol>
+        <li><a href="#p1"><span class="n">01</span><span>요구 사항 해석</span></a></li>
+        <li><a href="#p2"><span class="n">02</span><span>환경 점검</span></a></li>
+        <li><a href="#p3"><span class="n">03</span><span>지형과 세트 피스 생성</span></a></li>
+        <li><a href="#p4"><span class="n">04</span><span>식생과 생물 메시</span></a></li>
+        <li><a href="#p5"><span class="n">05</span><span>배치와 비행 경로</span></a></li>
+        <li><a href="#p6"><span class="n">06</span><span>셰이더: 물의 광학</span></a></li>
+        <li><a href="#p7"><span class="n">07</span><span>렌더 패스 구성</span></a></li>
+        <li><a href="#p8"><span class="n">08</span><span>단일 파일 빌드</span></a></li>
+        <li><a href="#p9"><span class="n">09</span><span>검증 게이트 9종</span></a></li>
+        <li><a href="#p10"><span class="n">10</span><span>시각 비평 루프</span></a></li>
+        <li><a href="#p11"><span class="n">11</span><span>프레임당 할당 제거</span></a></li>
+        <li><a href="#p12"><span class="n">12</span><span>남은 한계</span></a></li>
+        <li><a href="#glossary"><span class="n">※</span><span>용어집</span></a></li>
+      </ol>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+<section class="phase" id="p1">
+  <div class="ph-head"><span class="ph-num">단계 01</span><h2>요구 사항을 검사 가능한 조건으로 바꾸기</h2></div>
+  <p class="goal">목표: "아름다운 수중 장면"이라는 말을 기계가 판정할 수 있는 항목으로 분해합니다.</p>
+  <p>요청문에는 지켜야 할 조건이 섞여 있었습니다. 엔진 사용 금지, WebGPU, 절차적 생성, 단일 파일, 프레임당 할당 0, 성능 수치, 장면 구성 요소, 조작 방식, 그리고 두 개의 검증 관문입니다.
+    이 가운데 코드로 판정할 수 있는 것과 눈으로만 판정할 수 있는 것을 먼저 나누었습니다.</p>
+  <ul>
+    <li><b>코드로 판정:</b> 단일 파일 여부, 엔진 문자열 부재, WebGPU 컨텍스트 사용, 셰이더 컴파일 성공, 개체 수, 비행 경로가 암석을 통과하지 않는지, 프레임당 할당량, 조작 방향.</li>
+    <li><b>눈으로만 판정:</b> 아름다움, 암석이 암석처럼 보이는지, 물결이 자연스러운지. 이 영역은 렌더 결과만 보는 별도 검토자에게 맡기기로 했습니다.</li>
+  </ul>
+  <div class="note"><b>이 단계에서 내린 결정</b>
+    <p>장면의 모든 형상을 <button type="button" class="gl" data-k="sdf">SDF</button>로 기술하고, 메시는 빌드 시점이 아니라 페이지가 열릴 때 생성하기로 했습니다.
+      텍스처 파일을 쓸 수 없으므로 표면의 무늬도 전부 셰이더 안에서 계산해야 하고, 그렇다면 형상 역시 수식으로 두는 편이 일관되기 때문입니다.</p></div>
+  <div class="stack">
+    <span class="chip">요구사항 분해</span><span class="chip">판정 가능성 분류</span>
+  </div>
+</section>
+
+<section class="phase" id="p2">
+  <div class="ph-head"><span class="ph-num">단계 02</span><h2>작업 환경이 실제로 동작하는지 확인</h2></div>
+  <p class="goal">목표: 코드를 쓰기 전에, 결과를 볼 수 있는 경로부터 확보합니다.</p>
+  <p>이 Mac은 Apple M4 Pro이고 목표 사양인 RTX 5070 Ti 장비에는 접근할 수 없었습니다.
+    먼저 <button type="button" class="gl" data-k="headless">헤드리스 Chrome</button>에서 WebGPU가 렌더링되고 그 화면을 캡처할 수 있는지 확인했습니다.
+    이 확인이 없으면, 나중에 검은 화면을 찍고도 원인을 모른 채 헤매게 됩니다.</p>
+  <pre><code>$ agent-browser --webgpu doctor --webgpu
+  pass  WebGPU rendered and read back pixels (apple metal-3)
+  pass  Screenshot captured WebGPU output in headless mode
+  Summary: 12 pass, 0 warn, 0 fail</code></pre>
+  <p>이어서 로컬 캡처 서버를 띄웠습니다. 페이지가 렌더한 프레임을 <code>fetch</code>로 서버에 올리면 서버가 파일로 저장하는 구조이며,
+    이후 모든 캡처와 녹화가 이 경로를 사용합니다.</p>
+  <div class="stack">
+    <span class="chip">Chrome 157</span><span class="chip">agent-browser 0.41.2</span><span class="chip c">Bun 서버</span><span class="chip c">ffmpeg</span>
+  </div>
+</section>
+
+<section class="phase" id="p3">
+  <div class="ph-head"><span class="ph-num">단계 03</span><h2>지형과 세트 피스를 수식에서 메시로</h2></div>
+  <p class="goal">목표: 협곡, 아치, 떠 있는 바위, 난파선, 고래 꼬리 조각상을 코드로 만듭니다.</p>
+  <p>모든 형상을 거리 함수로 적고, 이를 <button type="button" class="gl" data-k="nets">서피스 넷</button>으로 삼각형 메시로 바꾸었습니다.
+    지형은 230×37×230 크기의 <button type="button" class="gl" data-k="grid">밀도 격자</button>를 쓰며, 이 격자는 나중에 카메라 충돌 판정에도 그대로 재사용합니다.</p>
+
+  <h3>지형을 이루는 항</h3>
+  <ul>
+    <li><b>바닥:</b> 두 겹의 <button type="button" class="gl" data-k="vnoise">값 노이즈</button>로 완만한 기복을 만듭니다.</li>
+    <li><b>협곡 벽:</b> 중앙 통로를 따라 솟아오르게 하고, 통로에서 멀어지면 노이즈가 만드는 미로형 협곡으로 전환합니다.</li>
+    <li><b>선반:</b> 높이에 따라 톱니형 함수를 더해, 벽이 올라가면서 뒤로 물러났다가 다시 튀어나오게 합니다. 오버행이 여기서 생깁니다.</li>
+    <li><b>아치:</b> 두 개의 원환형 SDF를 <button type="button" class="gl" data-k="smin">부드러운 최솟값</button>으로 지형에 녹였습니다.</li>
+  </ul>
+
+  <h3>난파선</h3>
+  <p>선체는 평면 하나를 깎아 만든 것이 아니라, 판자 한 장마다 서로 다른 위치에서 부서지도록 했습니다.
+    판자 번호를 해시에 넣어 파손 노이즈의 좌표를 흔들면, 구멍이 판자 경계를 따라 생깁니다.
+    늑골은 난간 위로 솟아 있고, 돛대는 끝으로 갈수록 가늘어지다가 쪼개진 단면에서 끝납니다.</p>
+
+  <h3>조각상</h3>
+  <p>고래 꼬리는 선분 다섯 개를 굵기가 변하는 캡슐로 만들어 합치고, 기둥에 세로 홈과 가락지 세 개를 새겼습니다.
+    여기에 침식 노이즈를 한 겹 더해 모서리를 깨뜨렸습니다.</p>
+
+  <div class="note"><b>삽질 기록</b>
+    <p>처음 만든 지형은 삼각형의 <button type="button" class="gl" data-k="winding">감는 방향</button>이 절반쯤 뒤집혀 있었습니다.
+      서피스 넷에서 사각형을 만들 때 밀도의 부호에 따라 정점 순서를 바꿔야 하는데 이를 빠뜨린 탓입니다.
+      검사 스크립트에서 기하 법선과 기울기 법선의 내적을 세어 잡았고, 현재는 99.79%가 올바른 방향입니다.</p></div>
+
+  <div class="stack">
+    <span class="chip">JavaScript</span><span class="chip">SDF</span><span class="chip">Surface Nets</span><span class="chip">Float32Array</span>
+  </div>
+</section>
+
+<section class="phase" id="p4">
+  <div class="ph-head"><span class="ph-num">단계 04</span><h2>식생과 생물을 적은 삼각형으로</h2></div>
+  <p class="goal">목표: 4만 개 넘게 배치해도 버틸 만큼 가벼운 메시를 만듭니다.</p>
+  <p>지형과 달리 식물과 물고기는 같은 메시를 수천 번 반복해서 그립니다.
+    따라서 개당 삼각형 수가 그대로 전체 비용이 되므로, 형상마다 다른 생성 방식을 골랐습니다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>메시</th><th>생성 방식</th><th class="num">삼각형</th><th class="num">배치 수</th></tr></thead>
+    <tbody>
+      <tr><td>해초 기둥</td><td>줄기 리본 2장 + 잎 리본 230장</td><td class="num">2,492</td><td class="num">603</td></tr>
+      <tr><td>지면 덮개</td><td>잎 리본 10장</td><td class="num">60</td><td class="num">43,036</td></tr>
+      <tr><td>무지개 덤불</td><td>호를 그리는 넓은 잎 13장</td><td class="num">156</td><td class="num">3,512</td></tr>
+      <tr><td>통 해면</td><td>회전면, 울퉁불퉁한 테두리</td><td class="num">616</td><td class="num">246</td></tr>
+      <tr><td>가지 산호</td><td>재귀 분기 튜브</td><td class="num">970</td><td class="num">642</td></tr>
+      <tr><td>물고기</td><td>회전면 + 지느러미 4장</td><td class="num">348</td><td class="num">2,546</td></tr>
+      <tr><td>가오리</td><td>날개 단면 격자 + 분절 꼬리</td><td class="num">1,458</td><td class="num">9</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>잎은 두께가 없는 리본입니다. 그대로 두면 종이처럼 보이므로, 양쪽 가장자리의 법선을 서로 벌려
+    <button type="button" class="gl" data-k="normal">셰이딩 법선</button>만 둥글게 만들었습니다. 삼각형은 그대로 두 장이지만 빛을 받는 모습은 곡면이 됩니다.</p>
+
+  <div class="note warn"><b>비평이 잡아낸 것</b>
+    <p>지느러미 곡선에 <code>pow(sin(πs), 0.8)</code>을 썼는데, 리본 생성기가 접선을 구하려고 <code>s=1</code>을 살짝 넘겨 값을 뽑습니다.
+      그 지점에서 <code>sin</code>이 음수가 되어 <code>pow</code>가 NaN을 반환했고, 정점 하나가 통째로 깨졌습니다.
+      생성 검사가 NaN을 잡아내어 발견했습니다.</p></div>
+
+  <div class="stack">
+    <span class="chip">파라메트릭 곡면</span><span class="chip">리본 압출</span><span class="chip b">인스턴싱 전제 설계</span>
+  </div>
+</section>
+
+<section class="phase" id="p5">
+  <div class="ph-head"><span class="ph-num">단계 05</span><h2>5만 개를 겹치지 않게 놓고, 길을 냅니다</h2></div>
+  <p class="goal">목표: 식물이 서로를 뚫지 않고, 카메라가 지나갈 길은 비어 있게 합니다.</p>
+  <p>배치는 지형 메시의 정점을 무작위로 골라 그 자리에 세우는 방식입니다. 법선이 위를 향하고 높이 조건에 맞는 정점만 고릅니다.
+    여기에 두 가지 제약을 더했습니다.</p>
+  <ul>
+    <li><b>점유 격자:</b> 0.5m 칸의 비트맵에 큰 소품이 자기 발자국을 표시합니다. 이후의 작은 소품과 덮개는 표시된 칸을 피합니다. 해면 안에서 산호가 자라는 현상이 이걸로 사라졌습니다.</li>
+    <li><b>세트 피스 제외:</b> 난파선과 조각상의 SDF를 월드 좌표로 감싼 함수를 만들어, 그 안쪽에 떨어지는 소품은 버립니다.</li>
+  </ul>
+
+  <h3>비행 경로</h3>
+  <p>60초 비행은 23개의 제어점을 지나는 <button type="button" class="gl" data-k="catmull">카트멀-롬 스플라인</button>입니다.
+    경로를 0.02 간격으로 표본화하여, 모든 지점에서 암석·수면·바위·세트 피스로부터 2.4m 이상 떨어져 있는지 검사합니다.
+    이 검사가 실패하면 빌드가 멈추므로, 경로를 손볼 때마다 즉시 알 수 있었습니다.</p>
+
+  <p>물고기 떼와 가오리는 닫힌 궤도를 돌며, 그 궤도 전체가 열린 물속에 있는지, 그리고 비행 카메라와 고정 카메라로부터 충분히 떨어져 있는지도 생성 시점에 검사합니다.
+    물고기 한 마리는 12×5×4 격자의 한 칸을 배정받아, 같은 떼 안에서 서로 겹치지 않습니다.</p>
+
+  <pre><code>경로 여유: 3.22 m   (기준 2.4 m)
+개체 수: 해초 603 · 덮개 43,036 · 덤불 3,512
+         산호 1,261 · 해면 246 · 물고기 2,546 · 가오리 9</code></pre>
+
+  <div class="stack">
+    <span class="chip">스플라인</span><span class="chip">점유 격자</span><span class="chip">거부 표본화</span><span class="chip c">fail-closed 검사</span>
+  </div>
+</section>
+
+<section class="phase" id="p6">
+  <div class="ph-head"><span class="ph-num">단계 06</span><h2>물의 광학을 셰이더로</h2></div>
+  <p class="goal">목표: 깊이에 따른 흡수, 빛줄기, 커스틱, 수면을 <button type="button" class="gl" data-k="wgsl">WGSL</button>로 씁니다.</p>
+
+  <h3>흡수와 산란</h3>
+  <p>물은 빨간빛을 먼저 먹습니다. 색상마다 다른 감쇠 계수를 주어, 가까운 곳은 청록색이고 멀어질수록 짙은 파랑으로 바뀌게 했습니다.
+    산란광의 색은 시선 방향에 따라 달라집니다. 위를 보면 밝은 청록, 아래를 보면 어두운 남색입니다.</p>
+
+  <h3>커스틱</h3>
+  <p>수면 물결이 빛을 모아 바닥에 그리는 무늬입니다. 애니메이션되는 <button type="button" class="gl" data-k="voronoi">보로노이</button> 경계 거리로 512×512 텍스처를 매 프레임 그리고,
+    월드 좌표를 태양 방향으로 밀어 평면에 투영한 좌표로 두 번 회전 샘플링합니다.
+    벽면에서는 이 무늬가 늘어나 물처럼 보이므로, 면이 위를 향한 정도에 따라 세기를 줄였습니다.</p>
+
+  <h3>빛줄기</h3>
+  <p>절반 해상도에서 32단계 <button type="button" class="gl" data-k="raymarch">레이 마칭</button>으로 구합니다.
+    각 지점에서 <button type="button" class="gl" data-k="shadow">섀도 맵</button>과 커스틱 값을 읽어 누적합니다.
+    카메라 바로 앞의 표본에 가중치를 낮추지 않으면, 잎 하나가 렌즈를 스칠 때 화면 전체의 빛줄기가 한 프레임 만에 꺼집니다.</p>
+
+  <h3>수면</h3>
+  <p>아래에서 본 수면은 <button type="button" class="gl" data-k="snell">스넬의 창</button>입니다. 굴절 벡터로 하늘을, 전반사 영역에서는 물속 색을 반사합니다.
+    물결은 방향이 서로 다른 사인파 10개의 합이며, 각 파동은 자신이 화면에서 몇 픽셀인지에 따라 사라집니다. 그래서 먼 수면은 잔물결 없이 매끈합니다.</p>
+
+  <div class="note warn"><b>두 번 고친 자리</b>
+    <p>처음에는 물결에 값 노이즈를 섞었습니다. 노이즈의 격자가 전반사 경계에서 사각 타일로 드러났습니다.</p>
+    <p>사인파로 바꾸었더니 이번에는 방향이 약 126도씩 일정하게 돌아가 세 방향이 반복되었고, 마름모 격자가 보였습니다.
+      방향 간격을 <button type="button" class="gl" data-k="golden">황금각</button>에 흔들림을 더한 값으로 바꾸어 해결했습니다.</p></div>
+
+  <div class="stack">
+    <span class="chip b">WGSL</span><span class="chip b">레이 마칭</span><span class="chip b">보로노이</span><span class="chip b">도메인 워프</span>
+  </div>
+</section>
+
+<section class="phase" id="p7">
+  <div class="ph-head"><span class="ph-num">단계 07</span><h2>한 프레임에 일어나는 일</h2></div>
+  <p class="goal">목표: 7개의 렌더 패스를 순서대로 엮습니다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th class="num">#</th><th>패스</th><th>해상도</th><th>하는 일</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td>커스틱 맵</td><td class="num">512²</td><td>보로노이 무늬를 텍스처에 그립니다.</td></tr>
+      <tr><td class="num">2</td><td>섀도 맵</td><td class="num">4096²</td><td>태양 방향 직교 투영으로 깊이만 기록합니다.</td></tr>
+      <tr><td class="num">3</td><td>주 패스</td><td class="num">전체 · <button type="button" class="gl" data-k="msaa">MSAA</button> 4×</td><td>지형, 소품, 생물, 수면, 원경 배경, 입자를 그립니다.</td></tr>
+      <tr><td class="num">4</td><td>빛줄기 + 블룸 추출</td><td class="num">1/2</td><td>레이 마칭 결과를 알파에, 밝은 부분을 RGB에 담습니다.</td></tr>
+      <tr><td class="num">5·6</td><td>가로·세로 <button type="button" class="gl" data-k="bloom">블룸</button> 흐림</td><td class="num">1/2</td><td>5탭 가우시안을 두 방향으로 나눕니다.</td></tr>
+      <tr><td class="num">7</td><td>합성</td><td class="num">전체</td><td>블룸 합성, 비네트, <button type="button" class="gl" data-k="aces">ACES 톤 매핑</button>, <button type="button" class="gl" data-k="dither">디더링</button>.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>그리는 양 줄이기</h3>
+  <p>월드 삼각형과 인스턴스를 40m 칸으로 묶어 417개의 덩어리로 나누고, 각 덩어리의 경계구가 <button type="button" class="gl" data-k="frustum">시야 절두체</button>에 닿는지 검사합니다.
+    비행 경로 전체에서 실제로 그려진 삼각형은 평균 437만 개로, 전체 689만 개의 63%입니다.
+    다만 섀도 패스는 컬링하지 않습니다. 화면 밖 물체도 화면 안에 그림자를 드리우기 때문입니다.</p>
+
+  <div class="stack">
+    <span class="chip">WebGPU 렌더 패스</span><span class="chip">HDR rgba16float</span><span class="chip">MSAA 4×</span><span class="chip">절두체 컬링</span>
+  </div>
+</section>
+
+<section class="phase" id="p8">
+  <div class="ph-head"><span class="ph-num">단계 08</span><h2>파일 하나로 묶기</h2></div>
+  <p class="goal">목표: 7개의 소스를 <code>index.html</code> 하나로 만듭니다.</p>
+  <p>WGSL 세 파일은 주석과 공백을 지워 하나의 문자열로 만들고, JavaScript 네 파일은 <button type="button" class="gl" data-k="bundler">번들러</button>로 압축합니다.
+    결과를 <code>&lt;script&gt;</code> 안에 넣어 HTML을 생성합니다.</p>
+  <pre><code>src/a.wgsl  b.wgsl  c.wgsl   →  18,957자 문자열
+src/gen1.js gen2.js gen3.js main.js  →  bun build --minify
+                            →  index.html  52,430 B (gzip 23,596 B)</code></pre>
+  <div class="note warn"><b>조용한 실패</b>
+    <p>첫 빌드는 오류 없이 끝났지만 페이지가 아무 일도 하지 않았습니다.
+      번들러가 입력을 CommonJS로 판단해 전체 코드를 호출되지 않는 래퍼 함수로 감쌌기 때문입니다.
+      입력 끝에 <code>export{}</code>를 붙여 ES 모듈임을 알리고, 래퍼가 다시 생기면 빌드가 실패하도록 검사를 넣었습니다.</p></div>
+  <div class="stack">
+    <span class="chip c">Bun.build</span><span class="chip c">정규식 압축</span><span class="chip c">Node 스크립트</span>
+  </div>
+</section>
+
+<section class="phase" id="p9">
+  <div class="ph-head"><span class="ph-num">단계 09</span><h2>산문이 아니라 종료 코드로 판정</h2></div>
+  <p class="goal">목표: "잘 됩니다"라는 말 대신 실행 결과를 남깁니다.</p>
+  <p>검사 9종을 하나의 스크립트로 묶었습니다. 하나라도 실패하면 전체가 실패합니다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>검사</th><th>판정 방법</th></tr></thead>
+    <tbody>
+      <tr><td>gen</td><td>월드 생성 불변 조건. 버퍼 넘침, NaN, 인덱스 범위, 감는 방향, 경로 여유, 자세 여유, 개체 수.</td></tr>
+      <tr><td>build</td><td>빌드 성공과 래퍼 부재.</td></tr>
+      <tr><td>single_file</td><td>외부 리소스 참조 문자열이 0건인지.</td></tr>
+      <tr><td>no_engine</td><td>엔진 이름과 WebGL 컨텍스트 문자열이 0건인지.</td></tr>
+      <tr><td>webgpu_only</td><td><code>getContext("webgpu")</code> 존재 확인.</td></tr>
+      <tr><td>wgsl</td><td>Chrome 157에서 셰이더를 실제로 컴파일하고 경고까지 0건인지.</td></tr>
+      <tr><td>page_runs</td><td>페이지를 열고 6개 자세를 캡처. 콘솔 오류 0건, 각 화면의 평균 밝기와 명암이 정상 범위인지.</td></tr>
+      <tr><td>heap</td><td><button type="button" class="gl" data-k="cdp">CDP</button> <button type="button" class="gl" data-k="sampling">할당 샘플링</button>으로 3,000프레임 측정.</td></tr>
+      <tr><td>controls</td><td>실제 키·마우스 이벤트를 보내고 카메라 좌표를 읽어 방향과 속도를 판정.</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note warn"><b>제가 틀렸던 보고</b>
+    <p>중간에 "W 이동과 Q 상승을 화면 변화로 확인했다"고 보고드렸으나, 이는 오판이었습니다.
+      시험 도구가 보낸 키 이벤트에 <code>code</code> 값이 비어 있어 카메라는 움직이지 않았고, 저는 해초의 흔들림을 이동으로 읽었습니다.</p>
+    <p>그래서 화면 비교를 버리고 카메라 좌표를 직접 읽는 게이트로 교체했습니다.
+      또한 프레임 루프가 없는 페이지에 이 게이트를 실행해 8개 항목이 실패하는 것까지 확인했습니다. 검사가 실패를 실제로 잡아내는지 본 것입니다.</p></div>
+
+  <pre><code>$ ./gates/verify_underwater.sh
+PASS[gen] PASS[build] PASS[single_file] PASS[no_engine]
+PASS[webgpu_only] PASS[wgsl] PASS[page_runs] PASS[heap] PASS[controls]
+GATE PASS   exit=0</code></pre>
+
+  <div class="stack">
+    <span class="chip c">bash</span><span class="chip c">Chrome DevTools Protocol</span><span class="chip c">ffmpeg signalstats</span>
+  </div>
+</section>
+
+<section class="phase" id="p10">
+  <div class="ph-head"><span class="ph-num">단계 10</span><h2>코드를 보지 않는 검토자</h2></div>
+  <p class="goal">목표: 자기 결과물을 자기가 평가하는 상황을 피합니다.</p>
+  <p>매 회차마다 새 검토자를 만들고, 렌더 결과만 들어 있는 폴더 하나만 읽게 했습니다. 코드도, 제 설명도 보지 못합니다.
+    전달한 자료는 고정 자세 6장(2560×1440 무손실), 60초 비행 영상, 60fps 무손실 연속 프레임, 고정 카메라 영상, 360도 회전 영상입니다.
+    심각도는 CRITICAL·MAJOR·MODERATE·MINOR 네 단계로 받았습니다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>회차</th><th>최고 심각도</th><th class="num">건수</th><th>대표 지적</th></tr></thead>
+    <tbody>
+      <tr><td class="num">1</td><td><span class="sev hi">MAJOR</span></td><td class="num">4·6·6</td><td>암석이 기울어진 수면처럼 보임. 전체가 한 가지 청록색. 물고기가 장난감 같음.</td></tr>
+      <tr><td class="num">2</td><td><span class="sev hi">MAJOR</span></td><td class="num">1·9·8</td><td>난파선 뒤 암벽의 능선이 자로 그은 듯 직선.</td></tr>
+      <tr><td class="num">3</td><td><span class="sev hi">MAJOR</span></td><td class="num">1·4·8</td><td>수면이 바둑판 모양으로 깨짐.</td></tr>
+      <tr><td class="num">4</td><td><span class="sev mid">MODERATE</span></td><td class="num">0·1·10</td><td>물결이 규칙적인 격자로 보임. 요구 항목은 전부 PRESENT.</td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>검토자가 찾아낸 진짜 버그</h3>
+  <ul>
+    <li><b>격자 번쩍임:</b> 반짝임 입자가 한 프레임 동안 24픽셀짜리 격자 사각형으로 번쩍였습니다. 셰이더의 <code>pow</code> 밑이 미세하게 음수가 되어 NaN이 생겼고, 그 NaN이 블룸 흐림을 타고 번졌습니다.</li>
+    <li><b>빛줄기 급소등:</b> 한 프레임 사이에 화면 밝기가 급변하는 횟수를 세어 측정했습니다. 47회에서 1회로 줄였습니다.</li>
+    <li><b>카메라 관통:</b> 자유 비행 시 난파선과 바위를 뚫고 지나갔습니다. 세트 피스의 SDF를 밀도 격자에 새겨 막았습니다.</li>
+  </ul>
+
+  <p>회차마다 수정 후 6장을 다시 캡처하고 60초를 다시 녹화했습니다. 녹화 1회에 약 2분 40초가 걸렸고, 캡처 자료는 합계 5.1GB가 쌓였습니다.</p>
+
+  <div class="stack">
+    <span class="chip b">제로 컨텍스트 검토자</span><span class="chip c">무손실 PNG</span><span class="chip c">키프레임 전용 H.264</span><span class="chip c">프레임 차분</span>
+  </div>
+</section>
+
+<section class="phase" id="p11">
+  <div class="ph-head"><span class="ph-num">단계 11</span><h2>프레임당 할당을 지우기</h2></div>
+  <p class="goal">목표: 가비지 컬렉션으로 인한 끊김을 없앱니다.</p>
+  <p>"프레임당 JS 할당 0"을 확인하려면 먼저 측정 방법이 필요했습니다.
+    <code>performance.memory</code>는 한 작업 안에서 값이 갱신되지 않아, 일부러 메모리를 할당하는 대조군조차 0으로 나왔습니다.
+    그래서 CDP의 할당 샘플링으로 바꾸고, 대조군이 제대로 잡히는지부터 확인했습니다.</p>
+
+  <p>측정해 보니 프레임당 약 550바이트가 할당되고 있었습니다. 원인은 셋이었습니다.</p>
+  <ul>
+    <li><b><button type="button" class="gl" data-k="boxing">힙 넘버 박싱</button>:</b> 카메라 좌표를 클로저 변수에 두면 쓸 때마다 힙 객체가 생깁니다. 11칸짜리 <code>Float64Array</code> 하나로 옮겼습니다.</li>
+    <li><b><code>Math.hypot</code>:</b> 가변 인자 내장 함수라 반환값이 박싱됩니다. <code>sqrt</code>로 바꾸었습니다.</li>
+    <li><b>함수 경계:</b> 실수를 인자로 넘기면 인라인되지 않을 때 박싱됩니다. 경로 계산과 밀도 조회를 타입 배열로만 주고받게 고쳤습니다.</li>
+  </ul>
+
+  <p>또 하나, 초기화 단계에서 프레임 연산을 3만 번 미리 돌려 <button type="button" class="gl" data-k="jit">JIT 예열</button>을 끝내 둡니다.
+    예열 전 코드는 모든 실수를 박싱하므로, 이 과정이 없으면 첫 수백 프레임에서 할당이 발생합니다.</p>
+
+  <pre><code>예열 후 3,000프레임 측정 (대조군 132 B/호출로 검증)
+  스크립트 비행  204 B/프레임
+  자유 비행      202 B/프레임
+  정지           203 B/프레임
+전량이 render() 안의 WebGPU 핸들 객체입니다.
+(명령 인코더 1 + 렌더 패스 7 + 커맨드 버퍼 1 + 캔버스 텍스처·뷰 2)</code></pre>
+
+  <div class="note"><b>정직한 한계</b>
+    <p>문자 그대로의 0바이트는 달성하지 못했습니다. WebGPU는 매 프레임 명령 인코더와 패스 객체를 새로 만들어야 하므로, 이 할당은 API 구조상 피할 수 없습니다.
+      장면 코드 자체의 할당은 0바이트입니다.</p></div>
+
+  <div class="stack">
+    <span class="chip">TypedArray 상태</span><span class="chip">JIT 예열</span><span class="chip c">HeapProfiler 샘플링</span>
+  </div>
+</section>
+
+<section class="phase" id="p12">
+  <div class="ph-head"><span class="ph-num">단계 12</span><h2>통과하지 못한 것</h2></div>
+  <p class="goal">목표: 무엇이 검증되었고 무엇이 아닌지 구분합니다.</p>
+
+  <h3>시각 게이트: 미통과</h3>
+  <p>요구 조건은 "minor를 넘는 지적이 없을 때까지"였습니다.
+    마지막으로 완료된 4회차에 MODERATE 1건이 남았고, 이를 수정한 최종 빌드는 5회차 검토를 받지 못한 채 중단되었습니다.
+    MINOR 7건은 수정하지 않았습니다.</p>
+
+  <h3>성능 게이트: 미검증</h3>
+  <p>목표 사양인 RTX 5070 Ti 장비에 접근할 수 없었습니다. 이 Mac(M4 Pro)에서 측정한 값은 다음과 같습니다.</p>
+
+  <div class="tw"><table>
+    <thead><tr><th>측정</th><th class="num">평균</th><th class="num">중앙값</th><th class="num">99%</th><th class="num">최대</th></tr></thead>
+    <tbody>
+      <tr><td>GPU 완료 대기 방식, 2560×1440</td><td class="num">10.4 ms</td><td class="num">9.4 ms</td><td class="num">27.9 ms</td><td class="num">94.6 ms</td></tr>
+      <tr><td>방해가 없던 구간만</td><td class="num">7.0–8.9 ms</td><td class="num">—</td><td class="num">—</td><td class="num">9–10 ms</td></tr>
+    </tbody>
+  </table></div>
+
+  <p>이 Mac에서는 다른 작업이 GPU와 CPU를 함께 쓰고 있어(<button type="button" class="gl" data-k="load">부하 평균</button> 6~40) 실행마다 값이 크게 달라집니다.
+    또한 헤드리스 브라우저는 모니터 주사율에 맞춰 화면을 표시하지 않으므로, 프레임 간격 기록은 실제 화면에서의 값과 다릅니다.
+    Apple GPU의 <button type="button" class="gl" data-k="timestamp">타임스탬프 쿼리</button> 값도 실제 처리 시간보다 작게 나오는 것으로 보여, 신뢰하지 않았습니다.</p>
+
+  <div class="note"><b>목표 PC에서 직접 재는 방법</b>
+    <p><code>index.html?bench</code>로 열면 2560×1440으로 고정하고 60초 비행을 실행한 뒤,
+      GPU 시간과 프레임 간격의 평균·99%·최대와 16.7ms 초과 횟수를 화면에 표시합니다.</p></div>
+
+  <div class="stack">
+    <span class="chip c">타임스탬프 쿼리</span><span class="chip c">rAF 간격 기록</span><span class="chip c">DevTools 트레이스</span>
+  </div>
+</section>
+
+<section class="glossary" id="glossary">
+  <h2 style="font-size:clamp(21px,3.2vw,27px);letter-spacing:-.015em">용어집</h2>
+  <p style="margin:14px 0 0;color:var(--fg2);max-width:64ch">본문의 점선 밑줄이 있는 낱말은 마우스를 올리거나 <kbd>Tab</kbd>으로 이동해 <kbd>Enter</kbd>를 누르면 설명이 열립니다.
+    인쇄하거나 툴팁을 쓸 수 없는 환경을 위해 아래에 같은 내용을 모아 두었습니다.</p>
+  <dl class="glist" id="glist"></dl>
+</section>
+
+</main>
+
+<footer class="wrap">
+  <p>이 문서의 수치는 전부 작업 중 실행한 명령의 출력에서 가져왔습니다. 측정하지 않은 값은 적지 않았고, 미검증 항목은 그렇게 표시했습니다.</p>
+  <p>소스: <code>src/gen1.js</code> · <code>gen2.js</code> · <code>gen3.js</code> · <code>main.js</code> · <code>a.wgsl</code> · <code>b.wgsl</code> · <code>c.wgsl</code> · 검사 <code>gates/</code> · 회차 기록 <code>cook/ROUNDS.md</code></p>
+</footer>
+
+<div id="tip" role="tooltip" hidden></div>
+
+<script>
+// 용어 사전: 본문 툴팁과 아래 용어집이 같은 원본을 씁니다.
+var G = {
+ webgpu:["WebGPU","브라우저에서 GPU를 직접 다루는 최신 표준입니다. 이전의 WebGL보다 명령을 묶어 보내는 방식이라 CPU 부담이 적고, 연산 셰이더도 쓸 수 있습니다."],
+ wgsl:["WGSL","WebGPU Shading Language. WebGPU에서 쓰는 셰이더 전용 언어입니다. 이 장면의 모든 색과 빛 계산이 이 언어로 작성되었습니다."],
+ sdf:["SDF · 부호 있는 거리 함수","어떤 점에서 물체 표면까지의 거리를 돌려주는 함수입니다. 안쪽이면 음수, 바깥이면 양수입니다. 정점 목록 대신 수식으로 형상을 적을 수 있고, 두 형상을 합치거나 깎는 일이 최솟값·최댓값 연산이 됩니다."],
+ nets:["서피스 넷","3차원 밀도 격자에서 표면이 지나는 칸마다 정점을 하나씩 두고 이웃끼리 이어 메시를 만드는 방법입니다. 마칭 큐브보다 정점 수가 적고 모양이 고릅니다."],
+ grid:["밀도 격자","공간을 일정 간격으로 나눈 격자의 각 점에 SDF 값을 미리 채워 둔 배열입니다. 이 장면에서는 메시 생성과 카메라 충돌 판정에 같은 격자를 씁니다."],
+ vnoise:["값 노이즈","격자점마다 난수를 두고 그 사이를 부드럽게 보간해 만드는 무작위 무늬입니다. 지형의 기복처럼 자연스러운 요철을 만들 때 씁니다."],
+ smin:["부드러운 최솟값","두 SDF를 합칠 때 경계가 날카롭게 꺾이지 않고 둥글게 이어지도록 하는 연산입니다. 아치가 암벽에서 자연스럽게 솟아나 보이는 이유입니다."],
+ winding:["감는 방향","삼각형 세 정점의 나열 순서입니다. 이 순서가 앞면과 뒷면을 결정하므로, 뒤집히면 조명이 반대로 계산되거나 면이 보이지 않습니다."],
+ normal:["셰이딩 법선","빛 계산에만 쓰는 가상의 면 방향입니다. 실제 형상은 평면이어도 법선을 휘어 놓으면 곡면처럼 보입니다."],
+ catmull:["카트멀-롬 스플라인","제어점을 모두 정확히 지나가는 매끄러운 곡선입니다. 카메라 경로처럼 지정한 지점을 꼭 통과해야 하는 경우에 적합합니다."],
+ voronoi:["보로노이","공간에 흩뿌린 점들을 기준으로 가장 가까운 점의 영역으로 나눈 구조입니다. 그 경계선까지의 거리를 쓰면 세포 모양이나 커스틱 무늬를 만들 수 있습니다."],
+ raymarch:["레이 마칭","카메라에서 뻗은 광선을 일정 간격으로 전진시키며 각 지점의 값을 더해 가는 방법입니다. 공기 중의 빛줄기처럼 표면이 없는 현상을 그릴 때 씁니다."],
+ shadow:["섀도 맵","태양 쪽에서 본 장면의 깊이만 미리 그려 둔 텍스처입니다. 어떤 지점이 그림자인지는 그 지점의 깊이와 이 텍스처의 값을 비교해 판정합니다."],
+ snell:["스넬의 창","물속에서 위를 보면 굴절 때문에 하늘 전체가 약 97도 원뿔 안의 밝은 원으로 모여 보이는 현상입니다. 그 원 바깥은 전반사로 물속 풍경이 비칩니다."],
+ golden:["황금각","약 137.5도입니다. 이 각도로 계속 돌리면 방향이 겹치거나 규칙적인 무늬를 이루지 않습니다. 해바라기 씨앗 배열에서도 같은 각도가 나타납니다."],
+ msaa:["MSAA · 다중 표본 안티에일리어싱","한 픽셀 안에서 도형의 덮인 정도를 여러 지점에서 재어 가장자리의 계단을 완화하는 기법입니다. 이 장면은 픽셀당 4지점을 씁니다."],
+ bloom:["블룸","밝은 부분의 빛이 주변으로 번져 보이게 하는 후처리입니다. 가로와 세로로 나누어 흐리면 연산량이 크게 줄어듭니다."],
+ aces:["ACES 톤 매핑","밝기 범위가 넓은 영상을 화면이 표현할 수 있는 범위로 압축하는 변환입니다. 밝은 부분이 흰색으로 뭉개지지 않고 색을 유지합니다."],
+ dither:["디더링","색 단계 사이에 아주 작은 잡음을 섞어, 완만한 그러데이션에 생기는 띠 무늬를 없애는 기법입니다. 깊은 바다의 파란 그러데이션에 꼭 필요합니다."],
+ frustum:["절두체 컬링","카메라 시야를 이루는 잘린 피라미드 모양의 공간 밖에 있는 물체를, 그리기 전에 걸러내는 기법입니다."],
+ bundler:["번들러","여러 소스 파일을 하나로 합치고 공백과 이름을 줄여 크기를 압축하는 도구입니다. 여기서는 Bun의 내장 번들러를 썼습니다."],
+ headless:["헤드리스 브라우저","창을 띄우지 않고 백그라운드에서 동작하는 브라우저입니다. 사용자의 화면과 마우스를 건드리지 않고 페이지를 열어 캡처할 수 있습니다."],
+ cdp:["CDP · Chrome DevTools Protocol","Chrome 개발자 도구가 브라우저와 주고받는 통신 규약입니다. 외부 프로그램이 이 규약으로 접속하면 메모리 측정이나 입력 이벤트 전송을 직접 할 수 있습니다."],
+ sampling:["할당 샘플링","메모리 할당을 일정 바이트 간격으로 표본 추출하여, 어느 함수가 얼마나 할당했는지 추정하는 측정 방식입니다. 이미 수거된 객체까지 셀 수 있습니다."],
+ boxing:["힙 넘버 박싱","JavaScript 엔진이 실수 값을 변수나 함수 인자로 전달할 때 힙에 작은 객체로 감싸 저장하는 동작입니다. 매 프레임 발생하면 가비지 컬렉션의 원인이 됩니다."],
+ jit:["JIT 예열","최적화 컴파일러가 함수를 기계어로 바꿀 때까지 같은 코드를 미리 반복 실행해 두는 일입니다. 예열 전의 코드는 느리고 실수 연산마다 할당이 생깁니다."],
+ timestamp:["타임스탬프 쿼리","GPU가 특정 명령을 처리한 시각을 기록하게 하는 기능입니다. 두 시각의 차이로 패스별 소요 시간을 잴 수 있지만, 칩에 따라 정확도가 다릅니다."],
+ load:["부하 평균","최근 1분·5분·15분 동안 실행을 기다린 작업의 평균 개수입니다. 코어 수보다 크면 작업들이 서로 자원을 다투고 있다는 뜻입니다."]
+};
+
+(function(){
+  // 테마: 저장된 수동 선택이 시스템 설정보다 우선합니다. 저장소 접근은 모두 보호합니다.
+  var root=document.documentElement, bL=document.getElementById('bLight'), bD=document.getElementById('bDark'), manual=null;
+  try{ var v=localStorage.getItem('mo-theme'); if(v==='light'||v==='dark') manual=v; }catch(e){}
+  function paint(){
+    var dark = manual ? manual==='dark' : matchMedia('(prefers-color-scheme: dark)').matches;
+    if(manual) root.setAttribute('data-theme',manual); else root.removeAttribute('data-theme');
+    bL.setAttribute('aria-pressed', String(manual==='light'));
+    bD.setAttribute('aria-pressed', String(manual==='dark'));
+  }
+  function set(v){ manual=v; try{ localStorage.setItem('mo-theme',v); }catch(e){} paint(); }
+  bL.onclick=function(){set('light')}; bD.onclick=function(){set('dark')};
+  try{ matchMedia('(prefers-color-scheme: dark)').addEventListener('change',function(){ if(!manual) paint(); }); }catch(e){}
+  paint();
+
+  // 용어집 채우기
+  var dl=document.getElementById('glist'), html='';
+  Object.keys(G).sort(function(a,b){return G[a][0].localeCompare(G[b][0],'ko')}).forEach(function(k){
+    var t=G[k][0].split(' · ');
+    html+='<div><dt>'+t[0]+(t[1]?' <span>'+t[1]+'</span>':'')+'</dt><dd>'+G[k][1]+'</dd></div>';
+  });
+  dl.innerHTML=html;
+
+  // 툴팁: 마우스 올림, 키보드 초점, 클릭·터치 모두에서 열립니다. Escape와 바깥 선택으로 닫습니다.
+  var tip=document.getElementById('tip'), open=null, hideT=null;
+  function show(el){
+    clearTimeout(hideT);
+    if(open&&open!==el) open.setAttribute('aria-expanded','false');
+    var g=G[el.dataset.k]; if(!g) return;
+    var t=g[0].split(' · ');
+    tip.innerHTML='<b>'+t[0]+(t[1]?' <span class="en">'+t[1]+'</span>':'')+'</b>'+g[1];
+    tip.hidden=false; el.setAttribute('aria-expanded','true'); open=el;
+    var r=el.getBoundingClientRect(), sx=scrollX, sy=scrollY, w=tip.offsetWidth, h=tip.offsetHeight;
+    var left=Math.min(Math.max(12, r.left+sx+r.width/2-w/2), sx+innerWidth-w-12);
+    var top=r.top+sy-h-10;
+    if(r.top-h-10 < 8) top=r.bottom+sy+10;          // 위가 좁으면 아래로 뒤집습니다
+    tip.style.left=left+'px'; tip.style.top=top+'px';
+  }
+  function hide(){ tip.hidden=true; if(open) open.setAttribute('aria-expanded','false'); open=null; }
+  function lazyHide(){ hideT=setTimeout(hide,180); }           // 설명 위로 마우스를 옮길 틈을 둡니다
+  document.querySelectorAll('.gl').forEach(function(el){
+    el.setAttribute('aria-expanded','false');
+    el.addEventListener('mouseenter',function(){show(el)});
+    el.addEventListener('mouseleave',lazyHide);
+    el.addEventListener('focus',function(){show(el)});
+    el.addEventListener('blur',lazyHide);
+    el.addEventListener('click',function(e){ e.stopPropagation(); (open===el)?hide():show(el); });
+  });
+  tip.addEventListener('mouseenter',function(){clearTimeout(hideT)});
+  tip.addEventListener('mouseleave',lazyHide);
+  addEventListener('keydown',function(e){ if(e.key==='Escape') hide(); });
+  addEventListener('click',function(e){ if(open && !tip.contains(e.target)) hide(); });
+  addEventListener('scroll',function(){ if(open) show(open); },{passive:true});
+  addEventListener('resize',hide);
+})();
+</script>
+</html>

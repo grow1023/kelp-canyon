@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="ko">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Kelp Canyon 프롬프트 개선 전후 비교</title>
+<meta name="description" content="같은 수중 장면을 원본 프롬프트와 개선 프롬프트로 각각 만들고, 두 결과를 수치와 화면으로 비교한 기록입니다.">
+<style>
+:root{--bg:#f3f6f8;--bg2:#e7edf1;--surface:#fff;--line:#d3dde4;--fg:#16242e;--fg2:#4a606f;--fg3:#5f7584;--accent:#0d6e8c;--accent2:#7a3f86;--accent-soft:#dceef4;--b-soft:#f0e3f3;--ok:#1d6b4f;--warn:#8a5a12;--code-bg:#eef3f6;--shadow:0 1px 2px rgba(16,40,56,.07),0 8px 24px rgba(16,40,56,.06);color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#071620;--bg2:#0b1f2c;--surface:#102634;--line:#1e3b4d;--fg:#e6f2f7;--fg2:#a9c3d1;--fg3:#8aa7b8;--accent:#5fc6e4;--accent2:#c79ad4;--accent-soft:#113646;--b-soft:#2c1d33;--ok:#6fd3a6;--warn:#e0b86a;--code-bg:#0a1e2a;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#071620;--bg2:#0b1f2c;--surface:#102634;--line:#1e3b4d;--fg:#e6f2f7;--fg2:#a9c3d1;--fg3:#8aa7b8;--accent:#5fc6e4;--accent2:#c79ad4;--accent-soft:#113646;--b-soft:#2c1d33;--ok:#6fd3a6;--warn:#e0b86a;--code-bg:#0a1e2a;--shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.35);color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{margin:0;background:var(--bg);color:var(--fg);font:400 16px/1.75 ui-sans-serif,-apple-system,"Apple SD Gothic Neo","Noto Sans KR",system-ui,sans-serif;word-break:keep-all;overflow-wrap:anywhere;text-wrap:pretty}
+h1,h2,h3{text-wrap:balance;line-height:1.3;margin:0}
+code,pre{font-family:ui-monospace,SFMono-Regular,"SF Mono",Menlo,monospace;word-break:normal;overflow-wrap:normal}
+code{background:var(--code-bg);padding:.12em .4em;border-radius:5px;font-size:.88em;color:var(--fg2)}
+a{color:var(--accent)}
+.wrap{max-width:980px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.theme{position:fixed;top:max(14px,env(safe-area-inset-top,0px));right:max(14px,env(safe-area-inset-right,0px));z-index:30;display:flex;gap:6px;padding:5px;background:var(--surface);border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow)}
+.theme button{width:40px;height:40px;display:grid;place-items:center;border:1px solid transparent;border-radius:999px;background:transparent;color:var(--fg2);cursor:pointer;padding:0}
+.theme button[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.theme svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round}
+button:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:6px}
+header{padding:76px 0 34px;background:linear-gradient(180deg,var(--bg2),var(--bg))}
+.eyebrow{font-size:13px;letter-spacing:.09em;color:var(--fg3);margin:0 0 14px}
+h1{font-size:clamp(28px,5.2vw,44px);letter-spacing:-.02em}
+.lede{margin:18px 0 0;font-size:clamp(16.5px,2.2vw,19px);color:var(--fg2);max-width:64ch}
+.cta{display:flex;flex-wrap:wrap;gap:10px;margin:26px 0 0}
+.btn{display:inline-flex;align-items:center;min-height:46px;padding:0 18px;border-radius:12px;border:1px solid var(--line);background:var(--surface);color:var(--fg);text-decoration:none;font-weight:600;font-size:15px;cursor:pointer;font-family:inherit}
+.btn.p{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+.btn:hover{border-color:var(--accent)}
+.facts{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;margin:32px 0 0;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+@media (min-width:700px){.facts{grid-template-columns:repeat(4,1fr)}}
+.facts div{background:var(--surface);padding:14px 16px;min-width:0}
+.facts dt{font-size:12.5px;color:var(--fg3);margin:0 0 4px}
+.facts dd{margin:0;font-size:19px;font-weight:600;font-variant-numeric:tabular-nums}
+.facts dd small{display:block;font-size:12.5px;font-weight:400;color:var(--fg3)}
+main{padding:6px 0 50px}
+section{padding:42px 0;border-bottom:1px solid var(--line)}
+section:last-of-type{border-bottom:0}
+.num{display:inline-block;font-size:13px;font-weight:600;color:var(--accent);background:var(--accent-soft);padding:3px 10px;border-radius:999px;margin-bottom:10px}
+h2{font-size:clamp(21px,3.2vw,27px);letter-spacing:-.015em}
+h3{margin:26px 0 0;font-size:16.5px}
+section p{margin:14px 0 0;max-width:66ch}
+section ul{margin:12px 0 0;padding-left:1.15em}
+section li{margin:7px 0;max-width:66ch}
+.prompt{margin:20px 0 0;border:1px solid var(--line);border-radius:12px;background:var(--code-bg);overflow:hidden}
+.prompt .bar{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:8px 10px 8px 16px;border-bottom:1px solid var(--line);background:var(--surface);font-size:13.5px;color:var(--fg3)}
+.prompt .bar button{min-height:36px;padding:0 14px;font-size:13.5px}
+pre{margin:0;padding:16px;overflow-x:auto;font-size:13px;line-height:1.65;color:var(--fg2);white-space:pre-wrap;tab-size:2}
+.tw{margin:20px 0 0;overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;min-width:560px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-weight:600;font-size:12.5px;letter-spacing:.03em;color:var(--fg3);white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.n{font-variant-numeric:tabular-nums;white-space:nowrap}
+.st{display:inline-block;font-size:12px;font-weight:600;padding:2px 9px;border-radius:999px;white-space:nowrap;border:1px solid currentColor}
+.st.ok{color:var(--ok)}.st.no{color:var(--warn)}
+.pair{margin:26px 0 0}
+.pair figcaption{font-weight:600;font-size:15px;margin-bottom:8px}
+.two{display:grid;gap:10px}
+@media (min-width:760px){.two{grid-template-columns:1fr 1fr}}
+.two>div{position:relative;min-width:0}
+.two img{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line);background:#021426}
+.shot{display:block;width:100%;height:auto;margin:20px 0 0;border-radius:10px;border:1px solid var(--line)}
+.tag{position:absolute;top:8px;left:8px;font-size:12.5px;font-weight:600;padding:3px 10px;border-radius:999px;background:#02182ce6;color:#eafcff;border:1px solid #ffffff55}
+.tag.b{background:#ffd76a;color:#1b1400;border-color:#ffd76a}
+.note{margin:20px 0 0;padding:15px 17px;background:var(--surface);border:1px solid var(--line);border-radius:12px}
+.note b{display:block;margin-bottom:5px;font-size:14.5px}
+.note p{margin:0;font-size:14.8px;color:var(--fg2)}
+.gl{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;cursor:help;border-bottom:1px dotted var(--accent)}
+.gl[aria-expanded="true"]{color:var(--accent);background:var(--accent-soft)}
+#tip{position:absolute;z-index:50;max-width:min(330px,calc(100vw - 32px));padding:12px 14px;background:var(--surface);color:var(--fg2);border:1px solid var(--line);border-radius:10px;box-shadow:var(--shadow);font-size:14px;line-height:1.6}
+#tip[hidden]{display:none}
+#tip b{display:block;color:var(--fg);margin-bottom:5px}
+.glist{margin:20px 0 0;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1px;background:var(--line);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.glist div{background:var(--surface);padding:14px 16px;min-width:0}
+.glist dt{font-weight:600;font-size:14.5px;margin:0 0 4px}
+.glist dd{margin:0;font-size:14px;color:var(--fg2);line-height:1.6}
+footer{padding:34px 0 60px;color:var(--fg3);font-size:14px}
+</style>
+<div class="theme" role="group" aria-label="테마 선택">
+<button type="button" id="bLight" aria-label="라이트 테마" title="라이트 테마" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><path d="M12 2.6v2.2M12 19.2v2.2M4.2 4.2l1.6 1.6M18.2 18.2l1.6 1.6M2.6 12h2.2M19.2 12h2.2M4.2 19.8l1.6-1.6M18.2 5.8l1.6-1.6"/></svg></button>
+<button type="button" id="bDark" aria-label="다크 테마" title="다크 테마" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.5 14.3A8.6 8.6 0 1 1 9.7 3.5a7 7 0 0 0 10.8 10.8z"/></svg></button>
+</div>
+<header><div class="wrap">
+<p class="eyebrow">프롬프트 개선 실험 · 2026-11-16</p>
+<h1>같은 장면, 두 개의 프롬프트</h1>
+<p class="lede">수중 협곡 장면을 원본 프롬프트로 한 번, 놓친 부분을 채운 개선 프롬프트로 한 번 더 만들었습니다. 이 문서는 두 프롬프트와 두 결과를 나란히 놓고, 무엇이 달라졌고 무엇이 여전히 남았는지를 수치와 화면으로 보여 드립니다.</p>
+<div class="cta"><a class="btn" href="/v1">개선 전 장면 열기</a><a class="btn p" href="/v2">개선 후 장면 열기</a><a class="btn" href="/making-of">개선 전 제작 과정</a></div>
+<dl class="facts">
+<div><dt>잎의 개수</dt><dd>61만 → 133만<small>켈프·지피식물·덤불 잎</small></dd></div>
+<div><dt>켈프 기둥</dt><dd>603 → 2,407<small>약 4배</small></dd></div>
+<div><dt>파일 크기</dt><dd>52 KB → 67 KB<small>상한 150 KB 이내</small></dd></div>
+<div><dt>검증 게이트</dt><dd>9종 통과<small>두 빌드 모두</small></dd></div>
+</dl>
+</div></header>
+<main class="wrap">
+
+<section id="s1"><span class="num">01</span><h2>개선 전 프롬프트</h2>
+<p>아래가 처음에 받은 프롬프트의 전문입니다. 장면에 들어갈 요소와 검증 방법은 구체적이지만, 얼마나 조밀해야 하는지와 제품으로서 갖춰야 할 기능은 적혀 있지 않습니다.</p>
+<div class="prompt"><div class="bar"><span>원본 프롬프트</span><button type="button" class="btn" data-copy="p0">원본 프롬프트 복사</button></div><pre id="p0">Build a real-time fantasy underwater scene that runs in the browser. It only needs to look beautiful and let me fly a free camera through it.
+
+PRIORITIES (in this order when they conflict)
+1. Visual quality
+2. Stable frame pacing at the target spec
+3. Small bundle size
+
+CONSTRAINTS
+- No Three.js/Babylon.js or other engines.
+- WebGPU rendered.
+- Everything procedural: no texture/model files. Deliverable is a single self-contained index.html. Report minified size.
+- Zero per-frame JS allocations (no GC stutter). Preallocate all buffers.
+
+TARGET
+- Windows 11 25H2, Chrome 157, RTX 5070 Ti, Ryzen 7800X3D, 180 Hz monitor
+- 2560×1440 at full resolution. GPU frame time ≤ 11 ms average, no frame &gt; 16.7 ms during a scripted 60 s fly-through.
+
+SCENE
+- Dense, towering kelp columns with sparkling green/gold specks, swaying
+- Strong depth fog/absorption: cyan near the surface → deep blue in the distance
+- God rays, animated caustics, wavy surface visible from below
+- Rock canyons, arches and overhangs; floating boulders
+- Iridescent purple/pink foliage, magenta ground cover, barrel sponges, coral
+- Animated life: manta rays, fish schools, rising bubbles, drifting particles
+- Set pieces: a sunken ship hull, a stone whale-fluke sculpture
+- World: bounded, but the boundaries can&#x27;t be visible from the starting area
+
+CONTROLS
+WASD move, mouse look (pointer lock), Q/E up/down, Shift to accelerate
+
+VERIFICATION
+- Visual critic: a separate subagent that sees ONLY the your renders, never your code or reasoning. Give it 6 fixed camera poses, rendered at 2560×1440 in GPU-accelerated Chrome, plus a short recording of the fly-through to catch shimmer, aliasing, popping and banding. It returns prioritized, concrete defects. Iterate until it reports nothing above &quot;minor&quot;.
+- Performance: GPU timestamp queries plus a frame-time log from the scripted fly-through. Report average, 99th percentile and max.
+
+DONE WHEN: both verification gates pass. Deliver index.html, the bundle size, the perf report and the critic&#x27;s final review.</pre></div>
+</section>
+
+<section id="s2"><span class="num">02</span><h2>개선 전 결과</h2>
+<p>이 프롬프트로 만든 결과는 52,430바이트의 <code>index.html</code> 한 개입니다. 요구된 장면 요소는 모두 들어갔고 검증 게이트 9종도 통과했지만, 페이지를 열면 안내 문구 한 줄과 함께 장면이 바로 시작되며 메뉴와 품질 조절 기능은 없습니다.</p>
+<ul>
+<li>프롬프트의 3순위였던 파일 크기를 줄이는 데 힘을 썼고, 그만큼 식생의 양이 적었습니다.</li>
+<li>지형 밀도를 CPU에서 계산했습니다.</li>
+<li>느린 기기를 위한 대응이 없어서, 성능이 부족하면 그대로 끊깁니다.</li>
+</ul>
+<p><a class="btn" href="/v1">개선 전 장면 열기</a></p>
+</section>
+
+<section id="s3"><span class="num">03</span><h2>무엇을 놓쳤는가</h2>
+<p>같은 프롬프트에서 출발한 다른 결과물과 비교해서 찾은 차이입니다. 앞의 다섯 줄은 프롬프트에 적혀 있지 않았던 부분이고, 뒤의 두 줄은 만드는 쪽의 판단이 어긋난 부분입니다.</p>
+<div class="tw"><table>
+<thead><tr><th>구분</th><th>놓친 것</th><th>그래서 생긴 결과</th></tr></thead><tbody>
+<tr><td>프롬프트</td><td>장면 밀도의 수치 기준</td><td>"dense"를 적은 수량으로 해석했습니다.</td></tr>
+<tr><td>프롬프트</td><td>품질을 견줄 기준 이미지</td><td>비평가가 절대 기준 없이 결함만 찾았습니다.</td></tr>
+<tr><td>프롬프트</td><td>메뉴, 로딩 바, 품질 단계, 터치, 소리</td><td>장면만 있고 제품의 껍데기가 없었습니다.</td></tr>
+<tr><td>프롬프트</td><td>크기의 상한선</td><td>"작게"라는 말 때문에 품질을 덜어 내면서 크기를 줄였습니다.</td></tr>
+<tr><td>프롬프트</td><td>목표 기기가 없을 때의 대안</td><td>보유한 기기에서만 측정했고 성능 게이트가 미통과로 남았습니다.</td></tr>
+<tr><td>실행</td><td>지형 계산 위치</td><td>CPU에서 계산해서 로딩이 길었습니다.</td></tr>
+<tr><td>실행</td><td>우선순위 적용</td><td>3순위인 크기를 1순위인 품질보다 앞세웠습니다.</td></tr>
+</tbody></table></div>
+</section>
+
+<section id="s4"><span class="num">04</span><h2>개선 후 프롬프트</h2>
+<p>원본 프롬프트는 그대로 두고, 그 뒤에 아래 네 묶음을 덧붙였습니다. 수치 기준, 기법 힌트, 제품 껍데기, 진행 방식입니다.</p>
+<div class="prompt"><div class="bar"><span>원본 뒤에 덧붙인 부분</span><button type="button" class="btn" data-copy="p1">추가 프롬프트 복사</button></div><pre id="p1">QUALITY BAR
+- Attached: 6 reference screenshots. The critic compares my renders side by side
+  with them and must not rank mine lower on density, lighting or depth.
+- Density floor: &gt;= 1,000,000 kelp leaves/plants, &gt;= 10,000 rocks, &gt;= 2,000 fish.
+- Bundle: anything under 150 KB is fine. Do not trade visual quality for bytes below that.
+
+TECHNIQUE HINTS
+- Generate terrain density on the GPU (compute shader). Use LOD meshes and distance
+  culling for far geometry so the density floor fits the frame budget.
+- Dynamic resolution: hold 60 fps on slower machines by lowering pixels first,
+  then draw distance. Benchmark mode keeps resolution fixed.
+
+PRODUCT SHELL
+- Loading bar while the world builds, start menu (&quot;Dive in&quot;), Esc menu with controls.
+- Low / Medium / High detail levels, auto-picked per device, remembered between visits.
+- Solid terrain collision. Keys 1-6 jump to the six critic poses.
+- Touch steering for phones. Procedural ambient audio (Web Audio), M to mute.
+
+PROCESS
+- Milestone 1: terrain + kelp + fog at the density floor. Show me a screenshot before continuing.
+- Milestone 2: all scene items. Milestone 3: product shell. Milestone 4: critic loop.
+- If the target GPU is not available, say so, measure on what you have, and
+  report the target gate as unverified instead of tuning the scene down.</pre></div>
+</section>
+
+<section id="s5"><span class="num">05</span><h2>개선 후 결과</h2>
+<p>개선 프롬프트로 다시 만든 결과는 67,450바이트의 <code>index.html</code> 한 개입니다. 페이지를 열면 로딩 바가 먼저 보이고, 세계가 만들어지면 시작 메뉴가 나타납니다.</p>
+<img class="shot" src="/img/v2-menu.jpg" width="1280" height="800" loading="lazy" alt="개선 후 빌드의 시작 메뉴. 잠수하기 버튼, 조작 안내, 세부 묘사 단계 버튼, 소리 버튼이 있습니다.">
+<h3>항목별 이행 여부</h3>
+<div class="tw"><table>
+<thead><tr><th>개선 프롬프트의 요구</th><th>결과</th><th>상태</th></tr></thead><tbody>
+<tr><td>잎 100만 개 이상</td><td class="n">1,332,884개</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>바위 1만 개 이상</td><td class="n">13,022개 (개선 전에는 없던 요소)</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>물고기 2,000마리 이상</td><td class="n">2,690마리</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>150 KB 이하</td><td class="n">67,450바이트 (gzip 30,035)</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>지형 밀도를 GPU에서 계산</td><td><button type="button" class="gl" data-k="compute">컴퓨트 셰이더</button>로 계산하며, CPU 공식과 500개 지점에서 대조합니다.</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>원거리 단순화와 거리 컬링</td><td>켈프와 지피식물에 <button type="button" class="gl" data-k="lod">LOD</button> 메시를 두고, 종류별로 그리는 거리를 정했습니다.</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>60 fps 유지</td><td><button type="button" class="gl" data-k="dynres">동적 해상도</button>를 8단계로 두고, 화소 수를 먼저 줄인 다음 그리는 거리를 줄입니다.</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>로딩 바, 시작 메뉴, Esc 메뉴</td><td>세 가지 모두 있습니다.</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>낮음·보통·높음 품질 단계</td><td>기기에 맞춰 자동으로 고르고, 선택을 브라우저에 기억합니다.</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>충돌, 1~6 시점 이동</td><td>암반 충돌은 개선 전부터 있었고, 숫자 키 이동을 추가했습니다.</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>터치 조종, 합성한 배경음, M 음소거</td><td>왼쪽 화면은 이동, 오른쪽 화면은 시점입니다. 소리는 Web Audio로 합성합니다.</td><td><span class="st ok">이행</span></td></tr>
+<tr><td>기준 스크린샷 6장과 나란히 비교</td><td>기준 이미지를 받지 않았습니다. 대신 개선 전 빌드와 나란히 비교했습니다.</td><td><span class="st no">미이행</span></td></tr>
+<tr><td>단계마다 스크린샷을 보여 주고 진행</td><td>중간 확인 없이 끝까지 진행했습니다.</td><td><span class="st no">미이행</span></td></tr>
+<tr><td>목표 기기가 없으면 미검증으로 보고</td><td>RTX 5070 Ti가 없어서 해당 게이트는 미검증입니다.</td><td><span class="st ok">이행</span></td></tr>
+</tbody></table></div>
+<p><a class="btn p" href="/v2">개선 후 장면 열기</a></p>
+</section>
+
+<section id="s6"><span class="num">06</span><h2>화면으로 비교</h2>
+<p>두 빌드를 같은 여섯 시점에서 2560×1440으로 그린 화면입니다. 각 화면의 왼쪽 위에 개선 전인지 개선 후인지를 표시했습니다.</p>
+<figure class="pair"><figcaption>시점 1 · 시작 지점</figcaption><div class="two">
+<div><span class="tag">개선 전</span><img src="/img/v1-p1.jpg" width="1280" height="720" loading="lazy" alt="개선 전 빌드의 시작 지점 화면"></div>
+<div><span class="tag b">개선 후</span><img src="/img/v2-p1.jpg" width="1280" height="720" loading="lazy" alt="개선 후 빌드의 시작 지점 화면"></div></div></figure><figure class="pair"><figcaption>시점 2 · 수면 올려다보기</figcaption><div class="two">
+<div><span class="tag">개선 전</span><img src="/img/v1-p2.jpg" width="1280" height="720" loading="lazy" alt="개선 전 빌드의 수면 올려다보기 화면"></div>
+<div><span class="tag b">개선 후</span><img src="/img/v2-p2.jpg" width="1280" height="720" loading="lazy" alt="개선 후 빌드의 수면 올려다보기 화면"></div></div></figure><figure class="pair"><figcaption>시점 3 · 바위 아치</figcaption><div class="two">
+<div><span class="tag">개선 전</span><img src="/img/v1-p3.jpg" width="1280" height="720" loading="lazy" alt="개선 전 빌드의 바위 아치 화면"></div>
+<div><span class="tag b">개선 후</span><img src="/img/v2-p3.jpg" width="1280" height="720" loading="lazy" alt="개선 후 빌드의 바위 아치 화면"></div></div></figure><figure class="pair"><figcaption>시점 4 · 고래 꼬리 조각</figcaption><div class="two">
+<div><span class="tag">개선 전</span><img src="/img/v1-p4.jpg" width="1280" height="720" loading="lazy" alt="개선 전 빌드의 고래 꼬리 조각 화면"></div>
+<div><span class="tag b">개선 후</span><img src="/img/v2-p4.jpg" width="1280" height="720" loading="lazy" alt="개선 후 빌드의 고래 꼬리 조각 화면"></div></div></figure><figure class="pair"><figcaption>시점 5 · 난파선</figcaption><div class="two">
+<div><span class="tag">개선 전</span><img src="/img/v1-p5.jpg" width="1280" height="720" loading="lazy" alt="개선 전 빌드의 난파선 화면"></div>
+<div><span class="tag b">개선 후</span><img src="/img/v2-p5.jpg" width="1280" height="720" loading="lazy" alt="개선 후 빌드의 난파선 화면"></div></div></figure><figure class="pair"><figcaption>시점 6 · 지피식물</figcaption><div class="two">
+<div><span class="tag">개선 전</span><img src="/img/v1-p6.jpg" width="1280" height="720" loading="lazy" alt="개선 전 빌드의 지피식물 화면"></div>
+<div><span class="tag b">개선 후</span><img src="/img/v2-p6.jpg" width="1280" height="720" loading="lazy" alt="개선 후 빌드의 지피식물 화면"></div></div></figure>
+</section>
+
+<section id="s7"><span class="num">07</span><h2>수치로 비교</h2>
+<div class="tw"><table>
+<thead><tr><th>항목</th><th>개선 전</th><th>개선 후</th></tr></thead><tbody>
+<tr><td>파일 크기</td><td class="n">52,430 B</td><td class="n">67,450 B</td></tr>
+<tr><td>소스 줄 수</td><td class="n">719줄</td><td class="n">879줄</td></tr>
+<tr><td>잎의 개수</td><td class="n">614,706</td><td class="n">1,332,884</td></tr>
+<tr><td>켈프 기둥</td><td class="n">603</td><td class="n">2,407</td></tr>
+<tr><td>바위와 자갈</td><td class="n">0</td><td class="n">13,022</td></tr>
+<tr><td>물고기</td><td class="n">2,546</td><td class="n">2,690</td></tr>
+<tr><td>배치된 개체 전체</td><td class="n">51,753</td><td class="n">97,063</td></tr>
+<tr><td>반짝임·물방울·부유물</td><td class="n">33,182</td><td class="n">75,182</td></tr>
+<tr><td>컬링 단위</td><td class="n">417</td><td class="n">856</td></tr>
+<tr><td>프레임 비용 (M4 Pro, 2560×1440, 60초 비행)</td><td class="n">중앙값 7.8 ~ 10.4 ms</td><td class="n">중앙값 8.7 ~ 12.5 ms</td></tr>
+<tr><td>메뉴, 품질 단계, 터치, 소리</td><td>없음</td><td>있음</td></tr>
+<tr><td>성능이 부족할 때</td><td>그대로 끊김</td><td><button type="button" class="gl" data-k="dynres">동적 해상도</button>로 60 fps 유지</td></tr>
+</tbody></table></div>
+<p>프레임 비용은 두 빌드를 번갈아 네 번씩 잰 값의 범위입니다. 개선 후가 대체로 1~2 ms 더 들지만, 잎이 두 배로 늘어난 것에 비하면 증가 폭이 작습니다. 그 이유는 멀리 있는 켈프와 지피식물을 <button type="button" class="gl" data-k="lod">LOD</button> 메시로 바꿔 그리고 안개에 가려지는 거리 밖의 개체를 그리지 않기 때문입니다. 다른 작업이 함께 돌아가는 기기에서 쟀기 때문에 측정할 때마다 값이 달라졌고, 그래서 범위로 적었습니다. 지형 밀도는 그래픽카드에서 0.1초 안팎에 계산됩니다.</p>
+<p>배경음은 90초 분량을 따로 렌더링해서 측정했습니다. 음량은 −21.8 <button type="button" class="gl" data-k="lufs">LUFS</button>, 최고점은 −6.7 dBFS였고, 잘린 샘플은 없었습니다.</p>
+</section>
+
+<section id="s8"><span class="num">08</span><h2>독립 비평의 판정</h2>
+<p>코드를 보지 못하는 별도의 검토자에게 두 빌드의 화면만 A와 B라는 이름으로 주고, 어느 쪽이 나은지를 물었습니다. 어느 쪽이 개선 후인지는 알려 주지 않았습니다.</p>
+<div class="tw"><table>
+<thead><tr><th>회차</th><th>개선 후 빌드의 결함</th><th>검토자의 판정</th><th>그 뒤에 고친 것</th></tr></thead><tbody>
+<tr><td class="n">1차</td><td class="n">MAJOR 1 · MODERATE 4 · MINOR 4</td><td>식생은 개선 후가 2~3배 조밀하지만, 켈프가 시작 지점과 명소를 가려서 구도는 개선 전이 낫다고 판정했습니다.</td><td>각 시점 앞과 명소로 향하는 시선에서 켈프를 비웠습니다.</td></tr>
+<tr><td class="n">2차</td><td class="n">MAJOR 0 · MODERATE 5 · MINOR 6</td><td>명소가 잘 보이고 갑자기 나타나는 물체가 0건(개선 전은 20건)이라고 판정했습니다. 다만 이번에는 열린 곳의 켈프가 성기다고 지적했습니다.</td><td>비우는 범위를 중간값으로 줄였습니다.</td></tr>
+<tr><td class="n">3차</td><td class="n">MAJOR 0 · MODERATE 4 · MINOR 5</td><td>전체 판정은 "개선 후가 낫다"였습니다. 여섯 시점 중 넷과 비행 영상에서 개선 후를 골랐고, 갑자기 나타나는 물체와 깜빡임은 찾지 못했습니다.</td><td>정한 상한인 3회차에 도달해서 여기서 멈췄습니다.</td></tr>
+</tbody></table></div>
+<p>1차와 2차 판정이 서로 반대 방향을 가리켰다는 점이 중요합니다. 밀도를 올리면 구도가 가려지고, 구도를 열면 밀도가 부족해집니다. 수치 기준만으로는 이 균형을 정할 수 없었습니다.</p>
+<p>3차에서도 개선 후가 개선 전보다 못한 점이 세 가지 남았습니다. 비행 40초 무렵에 켈프 한 줄기가 난파선 뱃머리를 약 2초 동안 가리고, 시작 화면이 더 복잡하며, 수면을 올려다보는 시점에서 가오리 여러 마리가 한데 뭉쳐 보입니다. 원본 프롬프트의 통과 기준은 "minor보다 큰 결함 없음"이므로, 시각 게이트는 개선 후 빌드에서도 통과하지 못했습니다.</p>
+</section>
+
+<section id="s9"><span class="num">09</span><h2>여전히 남은 것</h2>
+<ul>
+<li>목표 기기인 RTX 5070 Ti에서는 측정하지 못했습니다. 따라서 "GPU 평균 11 ms 이하, 16.7 ms 초과 0회"라는 성능 게이트는 두 빌드 모두 미검증입니다.</li>
+<li>터치 조종은 코드로만 넣었고, 실제 휴대폰에서는 확인하지 못했습니다.</li>
+<li>소리는 수치로만 측정했습니다. 듣기에 좋은지는 직접 들어 보셔야 판단하실 수 있습니다.</li>
+<li>기준 이미지와의 비교는 하지 않았습니다. 화면의 우열은 위의 여섯 쌍과 두 장면을 직접 보시고 판단해 주시기 바랍니다.</li>
+</ul>
+<div class="note"><b>프롬프트에 대해 배운 점</b><p>결과의 차이는 대부분 "얼마나"와 "무엇까지"를 적었는지에서 나왔습니다. 수치 기준 한 줄이 밀도를 두 배로 만들었고, 기능 목록 네 줄이 메뉴와 품질 단계와 소리를 만들었습니다. 반면 수치를 채우는 데에만 집중하면 장면이 가려진다는 점도 확인했습니다. 수치 기준에는 "명소가 가려지지 않을 것" 같은 구도 조건을 함께 적는 편이 좋습니다.</p></div>
+</section>
+
+<section id="glossary"><h2>용어집</h2><dl class="glist" id="glist"></dl></section>
+</main>
+<footer class="wrap"><p>두 장면 모두 그림 파일과 모델 파일 없이 코드로만 만들었으며, WebGPU를 지원하는 브라우저에서 동작합니다.</p></footer>
+<div id="tip" role="tooltip" hidden></div>
+<script>
+var G={
+ compute:["컴퓨트 셰이더","화면을 그리는 용도가 아니라 계산 자체를 그래픽카드에 맡기는 프로그램입니다. 여기서는 지형의 밀도 격자 약 200만 칸을 한 번에 계산합니다."],
+ lod:["LOD","Level of Detail의 줄임말입니다. 멀리 있는 물체를 더 단순한 모양으로 바꿔 그려서 부담을 줄이는 기법입니다."],
+ dynres:["동적 해상도","프레임이 느려지면 그리는 화소 수를 자동으로 줄였다가, 여유가 생기면 다시 늘리는 방식입니다. 화면 크기는 그대로이고 안쪽 그림만 작게 그려서 늘립니다."],
+ lufs:["LUFS","사람이 느끼는 소리의 크기를 나타내는 단위입니다. 숫자가 0에 가까울수록 큰 소리이며, 방송은 대체로 −23 안팎에 맞춥니다."]
+};
+(function(){
+ var root=document.documentElement,bL=document.getElementById('bLight'),bD=document.getElementById('bDark'),manual=null;
+ try{var v=localStorage.getItem('mo-theme');if(v==='light'||v==='dark')manual=v}catch(e){}
+ function paint(){if(manual)root.setAttribute('data-theme',manual);else root.removeAttribute('data-theme');bL.setAttribute('aria-pressed',String(manual==='light'));bD.setAttribute('aria-pressed',String(manual==='dark'))}
+ function set(v){manual=v;try{localStorage.setItem('mo-theme',v)}catch(e){}paint()}
+ bL.onclick=function(){set('light')};bD.onclick=function(){set('dark')};paint();
+ var h='';Object.keys(G).forEach(function(k){h+='<div><dt>'+G[k][0]+'</dt><dd>'+G[k][1]+'</dd></div>'});document.getElementById('glist').innerHTML=h;
+ var tip=document.getElementById('tip'),open=null,hideT=null;
+ function show(el){clearTimeout(hideT);if(open&&open!==el)open.setAttribute('aria-expanded','false');var g=G[el.dataset.k];if(!g)return;
+  tip.innerHTML='<b>'+g[0]+'</b>'+g[1];tip.hidden=false;el.setAttribute('aria-expanded','true');open=el;
+  var r=el.getBoundingClientRect(),w=tip.offsetWidth,ht=tip.offsetHeight,left=Math.min(Math.max(12,r.left+scrollX+r.width/2-w/2),scrollX+innerWidth-w-12),top=r.top+scrollY-ht-10;
+  if(r.top-ht-10<8)top=r.bottom+scrollY+10;tip.style.left=left+'px';tip.style.top=top+'px'}
+ function hide(){tip.hidden=true;if(open)open.setAttribute('aria-expanded','false');open=null}
+ function lazy(){hideT=setTimeout(hide,180)}
+ document.querySelectorAll('.gl').forEach(function(el){el.setAttribute('aria-expanded','false');el.addEventListener('mouseenter',function(){show(el)});el.addEventListener('mouseleave',lazy);el.addEventListener('focus',function(){show(el)});el.addEventListener('blur',lazy);el.addEventListener('click',function(e){e.stopPropagation();open===el?hide():show(el)})});
+ tip.addEventListener('mouseenter',function(){clearTimeout(hideT)});tip.addEventListener('mouseleave',lazy);
+ addEventListener('keydown',function(e){if(e.key==='Escape')hide()});addEventListener('click',function(e){if(open&&!tip.contains(e.target))hide()});addEventListener('resize',hide);
+ // 복사 버튼: 실제로 복사된 뒤에만 "복사됨"을 표시합니다
+ document.querySelectorAll('[data-copy]').forEach(function(b){var label=b.textContent;b.onclick=function(){var t=document.getElementById(b.dataset.copy).textContent;
+  (navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(function(){b.textContent='복사됨';setTimeout(function(){b.textContent=label},1600)},function(){b.textContent='복사하지 못했습니다';setTimeout(function(){b.textContent=label},2200)})}});
+})();
+</script>
+</html>
